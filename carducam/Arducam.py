@@ -30,27 +30,27 @@ class Arducam:
         if r != 0:
             raise AssertionError("Failed to set mode: {}".format(r))
 
-    def configure_board(self, handle, fileNodes):
-        for i in range(0, len(fileNodes)):
-            fileNode = fileNodes[i]
+    def configure_board(self, handle, registers):
+        for i in range(0, len(registers)):
+            register = registers[i]
             buffs = []
-            command = fileNode[0]
-            value = fileNode[1]
-            index = fileNode[2]
-            buffsize = fileNode[3]
-            for j in range(0, len(fileNode[4])):
-                buffs.append(int(fileNode[4][j], 16))
+            command = register[0]
+            value = register[1]
+            index = register[2]
+            buffsize = register[3]
+            for j in range(0, len(register[4])):
+                buffs.append(int(register[4][j], 16))
             ArducamSDK.Py_ArduCam_setboardConfig(handle, int(command, 16), int(value, 16), int(index, 16),
                                                  int(buffsize, 16), buffs)
 
-    def write_regs(self, handle, fileNodes):
-        for i in range(0, len(fileNodes)):
-            fileNode = fileNodes[i]
-            if fileNode[0] == "DELAY":
-                time.sleep(float(fileNode[1]) / 1000)
+    def write_regs(self, handle, registers):
+        for i in range(0, len(registers)):
+            register = registers[i]
+            if register[0] == "DELAY":
+                time.sleep(float(register[1]) / 1000)
                 continue
-            regAddr = int(fileNode[0], 16)
-            val = int(fileNode[1], 16)
+            regAddr = int(register[0], 16)
+            val = int(register[1], 16)
             print(str(regAddr) + "\t" + str(val))
             ArducamSDK.Py_ArduCam_writeSensorReg(handle, regAddr, val)
 
