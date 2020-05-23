@@ -1,0 +1,59 @@
+#Camera hardware specifics
+frame_width: 640
+frame_height: 484
+rotation_angle: 180
+optics_calibration: False
+GUI: False
+crop: False
+camera: arducam
+camera_startup_delay: 2
+camera_init_delay: 5
+
+#Camera location specifics
+cam_prefix: "_shredcam"
+fraction_masked_top: 0.5
+fraction_masked_bottom: 0.1
+fraction_masked_left: 0.1
+fraction_masked_right: 0.2
+
+#Motion detection specifics
+detect_motion: false
+min_N_contours: 0
+max_N_contours: 4
+min_Contour_area: 500
+max_Contour_area: 10000
+min_Contour_largest: 0
+min_Perimeter: 0
+max_Perimeter: 1000
+min_Average_N_contours: 0
+max_Average_N_contours: 4
+min_Average_Contour_area: 250
+max_Average_Contour_area: 10000
+min_Ratio_Contour_area_to_N_contours: 0
+min_Ratio_Contour_largest_to_Contour_area: 90
+max_Ratio_Contour_area_to_Perimeter: 15
+MotionCheckInterval: 1
+AveragedBackground: False
+ImageBlurKernel: 21
+ThresholdBlurKernel: 21
+PreMovementCounter: 5
+PostMovementCounterReset: 100
+
+#Output specifics
+output_frame_width: 640
+output_frame_height: 480
+frame_delta_screenshot: 25000
+frame_delta_pifeed: 3
+image_post_interval: 25
+write_frame: False
+log_level: info
+
+output:
+  enable_file_backup: True
+  enable_fileserver: True
+  enable_remote_storage: False
+  remote_storage_drive: "/home/pi/share/new"
+  fileserver_address: "http://192.168.50.187"
+  imageserver_address: "http://192.168.50.187"
+  fileserver_timeout: 10
+  fileserver_max_retries: 5

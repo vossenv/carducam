@@ -1,0 +1,38 @@
+logs_root: ../logs
+version: 1
+disable_existing_loggers: false
+formatters:
+    standard:
+        datefmt: '%Y-%m-%d %H:%M:%S'
+        format: '%(asctime)s  [%(name)-15.15s]  [%(levelname)-6.6s]  :::  %(message)s'
+handlers:
+    console:
+        class: logging.StreamHandler
+        formatter: standard
+        level: DEBUG
+    process:
+        level: DEBUG
+        class: logging.handlers.TimedRotatingFileHandler
+        formatter: standard
+        filename: process.log
+        when: midnight
+        backupCount: 10
+loggers:
+    "":
+        handlers:
+            - process
+            - console
+        level: DEBUG
+        propagate: true
+        "werkzeug":
+            handlers:
+                - process
+            level: DEBUG
+            propagate: true
+        "urllib3":
+            handlers:
+                - process
+            level: DEBUG
+            propagate: true
+
+
