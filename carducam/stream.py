@@ -2,7 +2,6 @@ import datetime
 import faulthandler
 import json
 import os
-import shutil
 import signal
 import sys
 import threading
@@ -20,13 +19,8 @@ def reprint(msg):
     sys.stdout.flush()
 
 
-# logger = open("ro.txt", "w")
-# logger.write("Time\tInt_time\tGain\tMean_gain\tDark\n")
-
-
 with open("config.yml", 'r') as stream:
     cfg = yaml.safe_load(stream)
-
 
 # For clarity in code
 output_options = cfg['output']
@@ -47,131 +41,6 @@ acfg = {}
 handle = {}
 
 
-class FileHandler:
-
-    def __init__(self):
-        self.save_path = backup_dir
-        self.timeout = output_options['fileserver_timeout']
-        self.max_retries = output_options['fileserver_max_retries']
-        self.camid = str(cfg['cam_prefix']).lstrip('_');
-
-    def make_backup(self, *filenames):
-        if output_options['enable_file_backup']:
-            reprint("Failed attempt, making a local backup... ")
-
-            for f in filenames:
-                shutil.copy(f, self.save_path)
-                reprint("Backup (count: " + self.countDir(self.save_path)
-                        + ")  created: " + os.path.join(self.save_path, f))
-        else:
-            reprint("Backup not enabled, skipping: " + str(filenames))
-
-    def make_dir(self, path):
-        reprint("Creating folders... " + path)
-        try:
-            os.mkdir(path)
-        except OSError:
-            pass
-
-    def copy_to_remote(self, *files):
-        status = 0
-        for f in files:
-            try:
-                if isinstance(f, tuple):
-                    finaldest = os.path.join(remote_dir, f[1]).rstrip(os.sep)
-                    f = f[0]
-                else:
-                    finaldest = remote_dir
-                reprint("Copying " + f + " to " + finaldest)
-                shutil.copy(os.path.join(f), finaldest)
-                status += 200
-            except Exception as e:
-                reprint("Transfer failed due to: " + str(e))
-                return 3
-        return status
-
-    # def post_files(self, *files):
-    #     status = 0
-    #     headers = {}
-    #     for f in files:
-    #
-    #         if isinstance(f, tuple):
-    #             headers['File-Destination'] = f[1]
-    #             f = f[0]
-    #
-    #         filesize = "%0.3f MB" % round(os.path.getsize(os.path.abspath(f)) / 1000000.0, 4)
-    #         headers['Size'] = filesize
-    #
-    #         for i in range(1, self.max_retries + 1):
-    #             try:
-    #                 reprint("Sending " + f + " (" + filesize + ") .... Attempt " + str(i) + "/" + str(self.max_retries))
-    #                 r = requests.post(url=output_options['fileserver_address'] + "/store", headers=headers,
-    #                                   files=dict(file=open(f, 'rb')), timeout=self.timeout)
-    #                 reprint("Result: " + str(r.status_code) + ": " + str(r.content))
-    #                 status += r.status_code
-    #                 if status % 200 == 0:
-    #                     reprint("Removing " + f)
-    #                     self.remove_files(f)
-    #                 break
-    #             except Exception as e:
-    #                 status = -1
-    #             if i == self.max_retries: reprint("Max tries exceeded, aborting transfers... ")
-    #             reprint("Status " + str(status))
-    #             if status % 200 != 0:
-    #                 reprint("Failed to complete upload: " + f + ". Size: " + filesize + ". Error: " + str(e))
-    #
-    #     return status
-
-    # def post_image(self, image):
-    #     # per_motion = str("%2.2f" % (100 * np.average(avgthresh) / (255 * frame_w * frame_h)))
-    #
-    #     image_metadata = {'Test-Header': 5}
-    #     header = {'Metadata': str(image_metadata)}
-    #     a_numpy = io.BytesIO(cv2.imencode('.jpg', image)[1])
-    #
-    #     try:
-    #         r = requests.post(url=output_options['imageserver_address'] + "/cameras/" + self.camid + "/update",
-    #                           files=dict(file=a_numpy), headers=header, timeout=self.timeout)
-    #     except Exception as e:
-    #         reprint(e)
-
-    def clean_directory(self, dir):
-        reprint("Cleaning directory " + dir + "....")
-        for f in os.listdir(dir):
-            self.remove_files(f)
-        reprint("Finished cleanup")
-
-    def remove_files(self, *filenames):
-        for f in filenames:
-            try:
-                f = os.path.abspath(f)
-                if not os.path.isdir(f):
-                    reprint("Removing " + f)
-                    os.unlink(f)
-                else:
-                    reprint("Skipping " + f + " because it is a directory...")
-            except Exception as e:
-                reprint("Could not remove: " + f + " due to " + str(e))
-
-    def sendBackupFiles(self):
-
-        if int(self.countDir(self.save_path)) == 0: return
-
-        reprint("\nAttempting to transfer " + self.countDir(self.save_path) + " files from backup.... ")
-        for f in os.listdir(self.save_path):
-            path = "logs" if f.endswith(".txt") else ""
-            f = os.path.join(self.save_path, f)
-            if fh.post_files((f, path)) != 200:
-                reprint("Failed transfer, waiting until subsuquent try to continue... ")
-                return
-            else:
-                reprint("Success! " + self.countDir(self.save_path) + " remain. Removing backup of... " + f)
-                fh.remove_files(f)
-
-    def countDir(self, path):
-        return str(len(os.listdir(path)))
-
-
 def configBoard(fileNodes):
     global handle
     for i in range(0, len(fileNodes)):
@@ -185,9 +54,6 @@ def configBoard(fileNodes):
             buffs.append(int(fileNode[4][j], 16))
         ArducamSDK.Py_ArduCam_setboardConfig(handle, int(command, 16), int(value, 16), int(index, 16),
                                              int(buffsize, 16), buffs)
-
-
-pass
 
 
 def writeSensorRegs(fileNodes):
@@ -207,12 +73,10 @@ def writeSensorRegs(fileNodes):
         ArducamSDK.Py_ArduCam_writeSensorReg(handle, regAddr, val)
 
 
-pass
-
-
 def camera_initFromFile(fialeName):
     global acfg, handle, Width, Height, color_mode, save_raw
     # load config file
+    z = handle
     config = json.load(open(fialeName, "r"))
     print(fialeName)
     #    print(config)
@@ -365,7 +229,7 @@ def readImage_thread():
     time0 = time.time()
     time1 = time.time()
     data = {}
-    #cv2.namedWindow("ArduCam Demo", 1)
+    # cv2.namedWindow("ArduCam Demo", 1)
     counter = 0
 
     # clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(4, 4))
@@ -377,15 +241,13 @@ def readImage_thread():
     fps = 0
     while running:
 
-
-
         if ArducamSDK.Py_ArduCam_availableImage(handle) > 0:
             rtn_val, data, rtn_cfg = ArducamSDK.Py_ArduCam_readImage(handle)
             datasize = rtn_cfg['u32Size']
 
             if counter % 10 == 0:
                 t2 = time.perf_counter()
-                fps = round(10/(t2-t),2)
+                fps = round(10 / (t2 - t), 2)
                 t = t2
                 reprint(fps)
             if rtn_val != 0:
@@ -395,9 +257,12 @@ def readImage_thread():
             if datasize == 0:
                 continue
 
-
             image = convert_image(data, rtn_cfg, color_mode)
             image = imutils.rotate_bound(image, cfg["rotation_angle"])
+            kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
+            image = cv2.medianBlur(image, 3)
+            # image = cv2.filter2D(image, -1, kernel)
+
             # image = cv2.resize(image, (frame_w, frame_h), interpolation=cv2.INTER_AREA)
 
             #            digits_area = image[int(image.shape[0] * 0.965):int((1 - 0) * image.shape[0]), int(image.shape[1] * 0):int((1 - 0.5) * image.shape[1]),:]
@@ -428,15 +293,15 @@ def readImage_thread():
 
             #            cv2.fillConvexPoly(image, np.array(a1, a2, a3, a4, 'int32'), 255)
 
-          #  cv2.fillPoly(image, digits_area, (0, 0, 0))
+            #  cv2.fillPoly(image, digits_area, (0, 0, 0))
 
             if counter == 0:
                 filename = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + "_front_top.avi"
-               # out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc('X', 'V', 'I', 'D'), 8,
-               #                       (cfg['output_frame_width'], cfg['output_frame_height']))
-                out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc('X', 'V', 'I', 'D'), 8, (1280, 964))
+                # out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc('X', 'V', 'I', 'D'), 8,
+                #                       (cfg['output_frame_width'], cfg['output_frame_height']))
+                out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc('X', 'V', 'I', 'D'), 22, (1280, 964))
 
-                #out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc('X', 'V', 'I', 'D'), 8, (640, 480))
+                # out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc('X', 'V', 'I', 'D'), 8, (640, 480))
                 #                out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc('M', 'J', '2', 'C'), 8, (1280, 964)) #Lossless
                 #                out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc('H', 'F', 'Y', 'U'), 8, (1280, 964)) #Lossless
                 reprint("Creating file " + str(filename))
@@ -450,7 +315,6 @@ def readImage_thread():
             # cv2.putText(image, ardu, (10, image.shape[0] - 40), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 255, 255), 1,
             #             cv2.LINE_AA)
 
-
             # try:
             #     colorconversion = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             # except:
@@ -461,10 +325,10 @@ def readImage_thread():
             cv2.waitKey(5)
             # cv2.resize(image, (640, 480))
 
-            # if out is not None:
-            #     out.write(cv2.resize(image, (1280, 964)))
+            if out is not None:
+                out.write(cv2.resize(image, (1280, 964)))
 
-            #out.write(image)
+            # out.write(image)
 
             #            regAddr = int(12644)
             #            val = hex(ArducamSDK.Py_ArduCam_readSensorReg(handle, regAddr)[1])
@@ -486,8 +350,8 @@ def readImage_thread():
             # except:
             #     colorconversion = image
             #     pass
-            #for i in range(2):
-             #   colorconversion = clahe.apply(colorconversion)
+            # for i in range(2):
+            #   colorconversion = clahe.apply(colorconversion)
 
             #            image = image[:,:,0]
             #            print(image.shape)
@@ -498,14 +362,14 @@ def readImage_thread():
             #            for i in range(image.shape[2]):
             #                image[:,:,i] = colorconversion
 
-            #fh.post_image(colorconversion)
+            # fh.post_image(colorconversion)
             counter += 1
 
-          #  if counter == 500:
-         #       out.release()
+            if counter == 500:
+                out.release()
             #     reprint("Sending file " + str(filename))
             #     threading.Thread(target=fh.post_files, args=[filename]).start()
-            #     counter = 0
+            #    counter = 0
             #            print("Exposure: " + str((ArducamSDK.Py_ArduCam_readSensorReg(handle, int(12460))[1])) + "\tAcq time: " + str((ArducamSDK.Py_ArduCam_readSensorReg(handle, int(12644))[1])) + "\tGain: " + str((ArducamSDK.Py_ArduCam_readSensorReg(handle, int(12586))[1])) + " lum: " + str((ArducamSDK.Py_ArduCam_readSensorReg(handle, int(12626))[1])) + "/" + str((ArducamSDK.Py_ArduCam_readSensorReg(handle, int(12546))[1]))  + " DC: " + str((ArducamSDK.Py_ArduCam_readSensorReg(handle, int(12680))[1])) + "/" + str((ArducamSDK.Py_ArduCam_readSensorReg(handle, int(12580))[1])))
 
             #            print("Noise correction\t" + "\t" + str((ArducamSDK.Py_ArduCam_readSensorReg(handle, int(12500))[1])))
@@ -557,7 +421,7 @@ signal.signal(signal.SIGTERM, sigint_handler)
 
 if __name__ == "__main__":
 
-    fh = FileHandler()
+    #fh = FileHandler()
     local_dir = "."
 
     config_file_name = ""
@@ -575,13 +439,7 @@ if __name__ == "__main__":
     if camera_initFromFile(config_file_name):
 
         print("reseting")
-
-        #        print("Integration time\t" + str((ArducamSDK.Py_ArduCam_readSensorReg(handle, int(12572))[1])))
-        #        ArducamSDK.Py_ArduCam_writeSensorReg(handle,12314,1)
-        #        print("Integration time\t" + str((ArducamSDK.Py_ArduCam_readSensorReg(handle, int(12572))[1])))
-        #        input("reset")
-
-        #		["0x311c","0x02A0"],
+        z = handle
         ArducamSDK.Py_ArduCam_setMode(handle, ArducamSDK.CONTINUOUS_MODE)
         ct = threading.Thread(target=captureImage_thread)
         rt = threading.Thread(target=readImage_thread)
