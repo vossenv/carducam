@@ -1,3 +1,9 @@
 
 device_id: 0
+rotation_angle: 0
 register_config: resources/AR0134_960p_Color.json
+show_preview: true
+show_fps: true
+show_label: false
+recording:
+  enabled: true

@@ -1,4 +1,3 @@
-import datetime
 import logging
 import threading
 import time
@@ -6,7 +5,7 @@ import time
 import imutils
 from cv2 import cv2
 
-from carducam.error import ImageCaptureException, USBCameraTaskError
+from carducam.error import ImageCaptureException, USBCameraTaskError, ImageReadException
 from lib import ArducamSDK
 from lib.ImageConvert import convert_image
 
@@ -70,57 +69,67 @@ class ImageReadThread(threading.Thread):
         finally:
             self.logger.info("Ending image read process safely")
 
+    def read_single_image(self):
+        rtn_val, data, rtn_cfg = ArducamSDK.Py_ArduCam_readImage(self.cam.handle)
+        datasize = rtn_cfg['u32Size']
+        if datasize == 0 or rtn_val != 0:
+            raise ImageReadException("Bad image read: datasize: {0}, code: {1}".format(datasize, rtn_val))
+        return rtn_val, data, rtn_cfg
+
+    def show_image(self, image):
+        cv2.imshow("stream", image)
+        cv2.waitKey(5)
+
+    def add_label(self, image, text):
+        cv2.putText(image, str(text), (10, image.shape[0] - 10),
+                    cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 255, 255), 1, cv2.LINE_AA)
+
     def read_image(self):
         counter = 0
-        out = None
-        t = time.perf_counter()
-        fps = 0
+        fps_counter = FPSCounter().start()
         self.running = True
         while self.running:
 
-            if ArducamSDK.Py_ArduCam_availableImage(self.cam.handle) > 0:
-                rtn_val, data, rtn_cfg = ArducamSDK.Py_ArduCam_readImage(self.cam.handle)
-                datasize = rtn_cfg['u32Size']
+            if ArducamSDK.Py_ArduCam_availableImage(self.cam.handle) <= 0:
+                time.sleep(0.001)
+                continue
 
-                if counter % 10 == 0:
-                    t2 = time.perf_counter()
-                    fps = round(10 / (t2 - t), 2)
-                    t = t2
-                    # reprint(fps)
-                if rtn_val != 0:
-                    print("read data fail!")
-                    continue
-
-                if datasize == 0:
-                    continue
+            try:
+                rtn_val, data, rtn_cfg = self.read_single_image()
 
                 image = convert_image(data, rtn_cfg, self.cam.color_mode)
-                angle = self.cam.config.get("rotation_angle")
-                if angle:
-                    image = imutils.rotate_bound(image, int(angle))
-
                 image = cv2.medianBlur(image, 3)
 
-                if counter == 0:
-                    filename = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + "_front_top.avi"
-                    out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc('X', 'V', 'I', 'D'), 22, (1280, 964))
+                if self.cam.rotation_angle != 0:
+                    image = imutils.rotate_bound(image, int(self.cam.rotation_angle))
 
-                    # reprint("Creating file " + str(filename))
+                if self.cam.show_label:
+                    text = ""
+                    if self.cam.show_fps and counter % 10 == 0:
+                        text += str(fps_counter.get_fps(10))
+                    self.add_label(image, text)
 
-                cv2.putText(image, str(fps), (10, image.shape[0] - 10),
-                            cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 255, 255), 1, cv2.LINE_AA)
-
-                cv2.imshow("stream", image)
-                cv2.waitKey(5)
-
-                if out is not None:
-                    out.write(cv2.resize(image, (1280, 964)))
+                if self.cam.show_preview:
+                    self.show_image(image)
 
                 counter += 1
-
-                if counter == 500:
-                    out.release()
-                #    counter = 0
+            except ImageReadException as e:
+                self.logger.warning("Bad image read: {}".format(e))
+            finally:
                 ArducamSDK.Py_ArduCam_del(self.cam.handle)
-            else:
-                time.sleep(0.001)
+
+
+class FPSCounter():
+
+    def __init__(self):
+        self.time = 0
+
+    def start(self):
+        self.time = time.perf_counter()
+        return self
+
+    def get_fps(self, frames):
+        t = time.perf_counter()
+        fps = round(frames / (t - self.time), 2)
+        self.time = t
+        return fps

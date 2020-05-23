@@ -10,26 +10,15 @@ from carducam.resources import get_resource
 
 
 def main():
-
     init_logger(get_resource('logging_config.yaml'))
-    with open(get_resource('app.yaml')) as f:
-        options = yaml.safe_load(f)
-
-    a = ArducamBuilder.build_from_file(options['register_config'], options['device_id'])
-
+    a = ArducamBuilder.build_from_file(get_resource('app.yaml'))
     a.start()
-
-    # ct = threading.Thread(target=captureImage_thread)
-    # rt = threading.Thread(target=readImage_thread)
-    # ct.start()
-    # rt.start()
-    # time.sleep(5)
 
     count = 0
     while True:
         time.sleep(1)
 
-        if count == 500:
+        if count == 5:
             a.stop()
             exit()
 

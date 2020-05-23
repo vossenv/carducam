@@ -1,9 +1,14 @@
-
-def CameraConfigurationException(BaseException):
+class CameraConfigurationException(BaseException):
     pass
 
-def ImageCaptureException(BaseException):
+
+class ImageCaptureException(BaseException):
     pass
 
-def USBCameraTaskError(BaseException):
+
+class ImageReadException(BaseException):
+    pass
+
+
+class USBCameraTaskError(BaseException):
     pass

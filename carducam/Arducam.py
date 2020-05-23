@@ -2,6 +2,8 @@ import json
 import logging
 import time
 
+import yaml
+
 from carducam.error import CameraConfigurationException
 from carducam.process import ImageCaptureThread, ImageReadThread
 from lib import ArducamSDK
@@ -11,13 +13,17 @@ class ArducamBuilder():
     logger = logging.getLogger("cam_builder")
 
     @classmethod
-    def build_from_file(cls, filename, dev_id=0):
+    def build_from_file(cls, filename):
 
         cls.logger.debug('Loading config file: {}'.format(filename))
-        with open(filename, 'r') as f:
-            config = json.load(f)
 
-        cam = Arducam(config, dev_id)
+        with open(filename, 'r') as f:
+            options = yaml.safe_load(f)
+
+        with open (options['register_config'], 'r') as f:
+            reg_config = json.load(f)
+
+        cam = Arducam(options, reg_config)
         cls.configure(cam)
         cls.set_mode(cam)
 
@@ -32,7 +38,7 @@ class ArducamBuilder():
 
     @classmethod
     def get_register_value(cls, cam, reg_name):
-        val = cam.config.get(reg_name)
+        val = cam.register_config.get(reg_name)
         if val is None:
             raise CameraConfigurationException("Specified parameter not in config json: {}".format(reg_name))
         return val
@@ -69,7 +75,7 @@ class ArducamBuilder():
         ret = -1
         for i in range(3):
             time.sleep(5)
-            ret, cam.handle, rtn_cfg = ArducamSDK.Py_ArduCam_open(cam.cam_cfg, cam.dev_id)
+            ret, cam.handle, rtn_cfg = ArducamSDK.Py_ArduCam_open(cam.cam_config, cam.dev_id)
             if ret == 0:
                 cam.usb_version = rtn_cfg['usbType']
                 return
@@ -78,7 +84,7 @@ class ArducamBuilder():
     @classmethod
     def configure(cls, cam):
 
-        camera_parameter = cam.config["camera_parameter"]
+        camera_parameter = cam.register_config["camera_parameter"]
         cam.width = int(camera_parameter["SIZE"][0])
         cam.height = int(camera_parameter["SIZE"][1])
         BitWidth = camera_parameter["BIT_WIDTH"]
@@ -92,17 +98,19 @@ class ArducamBuilder():
         I2CMode = camera_parameter["I2C_MODE"]
         I2cAddr = int(camera_parameter["I2C_ADDR"], 16)
         TransLvl = int(camera_parameter["TRANS_LVL"])
-        cam.cam_cfg = {"u32CameraType": 0x4D091031,
-               "u32Width": cam.width, "u32Height": cam.height,
-               "usbType": 0,
-               "u8PixelBytes": ByteLength,
-               "u16Vid": 0,
-               "u32Size": 0,
-               "u8PixelBits": BitWidth,
-               "u32I2cAddr": I2cAddr,
-               "emI2cMode": I2CMode,
-               "emImageFmtMode": FmtMode,
-               "u32TransLvl": TransLvl}
+        cam.cam_config.update({
+            "u32CameraType": 0x4D091031,
+            "u32Width": cam.width, "u32Height": cam.height,
+            "usbType": 0,
+            "u8PixelBytes": ByteLength,
+            "u16Vid": 0,
+            "u32Size": 0,
+            "u8PixelBits": BitWidth,
+            "u32I2cAddr": I2cAddr,
+            "emI2cMode": I2CMode,
+            "emImageFmtMode": FmtMode,
+            "u32TransLvl": TransLvl
+        })
 
         cls.connect_cam(cam)
         cls.configure_board(cam, "board_parameter")
@@ -124,9 +132,15 @@ class ArducamBuilder():
 
 class Arducam:
 
-    def __init__(self, config=None, dev_id=0):
-        self.config = config or {}
-        self.dev_id = dev_id
+    def __init__(self, cam_config=None, reg_config=None):
+        self.cam_config = cam_config
+        self.register_config = reg_config or {}
+        self.dev_id = cam_config['device_id']
+        self.recording_enabled = cam_config['recording'].get('enabled', False)
+        self.show_preview = cam_config.get('show_preview', True)
+        self.show_fps = cam_config.get('show_fps', True)
+        self.show_label = cam_config.get('show_label', True)
+        self.rotation_angle = cam_config.get('rotation_angle', 0)
         self.usb_version = None
         self.handle = {}
         self.running = False
@@ -134,7 +148,6 @@ class Arducam:
         self.save_flag = False
         self.save_raw = False
         self.handle = {}
-        self.cam_cfg = {}
         self.width = 0
         self.height = 0
 
@@ -143,7 +156,7 @@ class Arducam:
 
     def to_dict(self):
         d = vars(self).copy()
-        d.pop('config')
+        d.pop('register_config')
         d.pop('capture')
         d.pop('handle')
         return d
@@ -155,4 +168,3 @@ class Arducam:
     def stop(self):
         self.read.stop()
         self.capture.stop()
-
