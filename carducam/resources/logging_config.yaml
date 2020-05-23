@@ -20,15 +20,10 @@ handlers:
 loggers:
     "":
         handlers:
-            - process
+            #- process
             - console
         level: DEBUG
         propagate: true
-        "werkzeug":
-            handlers:
-                - process
-            level: DEBUG
-            propagate: true
         "urllib3":
             handlers:
                 - process
