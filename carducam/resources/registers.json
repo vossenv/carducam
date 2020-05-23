@@ -1,4 +1,5 @@
 {
+        "rotation_angle": 180,
         "camera_parameter" : {
                 "CFG_MODE":1,
                 "TYPE":"AR0134",

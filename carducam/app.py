@@ -5,7 +5,7 @@ import time
 
 import yaml
 
-from carducam.Arducam import ArducamBuilder
+from carducam.arducam import ArducamBuilder
 from carducam.resources import get_resource
 
 
@@ -17,7 +17,7 @@ def main():
 
     a = ArducamBuilder.build_from_file(options['register_config'], options['device_id'])
 
-    a.capture.start()
+    a.start()
 
     # ct = threading.Thread(target=captureImage_thread)
     # rt = threading.Thread(target=readImage_thread)
@@ -29,7 +29,7 @@ def main():
     while True:
         time.sleep(1)
 
-        if count == 5:
+        if count == 500:
             a.stop()
             exit()
 

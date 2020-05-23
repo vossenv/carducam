@@ -1,9 +1,9 @@
 import json
 import logging
-import threading
 import time
 
-from carducam.error import ImageCaptureException, USBCameraTaskError, CameraConfigurationException
+from carducam.error import CameraConfigurationException
+from carducam.process import ImageCaptureThread, ImageReadThread
 from lib import ArducamSDK
 
 
@@ -61,7 +61,7 @@ class ArducamBuilder():
             ArducamSDK.Py_ArduCam_writeSensorReg(cam.handle, int(r[0], 16), int(r[1], 16))
 
     @classmethod
-    def connect_cam(cls, cfg, cam):
+    def connect_cam(cls, cam):
 
         cls.logger.info("Beginning banana scan... ")
         ArducamSDK.Py_ArduCam_scan()
@@ -69,11 +69,11 @@ class ArducamBuilder():
         ret = -1
         for i in range(3):
             time.sleep(5)
-            ret, cam.handle, rtn_cfg = ArducamSDK.Py_ArduCam_open(cfg, cam.dev_id)
+            ret, cam.handle, rtn_cfg = ArducamSDK.Py_ArduCam_open(cam.cam_cfg, cam.dev_id)
             if ret == 0:
                 cam.usb_version = rtn_cfg['usbType']
                 return
-        raise AssertionError("Failed to load config - error code: {}".format(ret))
+        raise AssertionError("Failed to connect to camera - error code: {}".format(ret))
 
     @classmethod
     def configure(cls, cam):
@@ -92,7 +92,7 @@ class ArducamBuilder():
         I2CMode = camera_parameter["I2C_MODE"]
         I2cAddr = int(camera_parameter["I2C_ADDR"], 16)
         TransLvl = int(camera_parameter["TRANS_LVL"])
-        cfg = {"u32CameraType": 0x4D091031,
+        cam.cam_cfg = {"u32CameraType": 0x4D091031,
                "u32Width": cam.width, "u32Height": cam.height,
                "usbType": 0,
                "u8PixelBytes": ByteLength,
@@ -104,7 +104,7 @@ class ArducamBuilder():
                "emImageFmtMode": FmtMode,
                "u32TransLvl": TransLvl}
 
-        cls.connect_cam(cfg, cam)
+        cls.connect_cam(cam)
         cls.configure_board(cam, "board_parameter")
         if cam.usb_version == ArducamSDK.USB_1 or cam.usb_version == ArducamSDK.USB_2:
             cls.configure_board(cam, "board_parameter_dev2")
@@ -134,10 +134,12 @@ class Arducam:
         self.save_flag = False
         self.save_raw = False
         self.handle = {}
+        self.cam_cfg = {}
         self.width = 0
         self.height = 0
 
         self.capture = ImageCaptureThread(self)
+        self.read = ImageReadThread(self)
 
     def to_dict(self):
         d = vars(self).copy()
@@ -146,44 +148,11 @@ class Arducam:
         d.pop('handle')
         return d
 
+    def start(self):
+        self.capture.start()
+        self.read.start()
+
     def stop(self):
+        self.read.stop()
         self.capture.stop()
 
-
-class ImageCaptureThread(threading.Thread):
-
-    def __init__(self, cam):
-        super().__init__()
-
-        self.logger = logging.getLogger("cam_{}_capture: ".format(cam.dev_id))
-        self.cam = cam
-        self.running = True
-
-    def stop(self):
-        self.logger.info("Stop signal recieved - stopping acquisition")
-        self.running = False
-
-    def run(self):
-        try:
-            self.logger.info("Beginning image capture process")
-            self.capture_image()
-        finally:
-            self.logger.info("Ending image capture process safely")
-            ArducamSDK.Py_ArduCam_endCaptureImage(self.cam.handle)
-
-    def capture_image(self):
-
-        rtn_val = ArducamSDK.Py_ArduCam_beginCaptureImage(self.cam.handle)
-        if rtn_val != 0:
-            raise ImageCaptureException("Error beginning capture, rtn_val: {}".format(rtn_val))
-        self.logger.info("Starting image capture for dev: {}".format(self.cam.dev_id))
-        while self.running:
-            try:
-                rtn_val = ArducamSDK.Py_ArduCam_captureImage(self.cam.handle)
-                if rtn_val > 255:
-                    if rtn_val == ArducamSDK.USB_CAMERA_USB_TASK_ERROR:
-                        raise USBCameraTaskError("USB task error: {}".format(rtn_val))
-                    raise ImageCaptureException("Error capture image, rtn_val: ".format(rtn_val))
-                time.sleep(0.005)
-            except ImageCaptureException as e:
-                self.logger.warning("Non critical error capturing image: {}".format(str(e)))
