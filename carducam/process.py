@@ -94,7 +94,7 @@ class ImageReadThread(threading.Thread):
 
         if self.cam.recording_enabled:
             filename = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".avi"
-            video = Video(filename)
+            video = Video(filename, self.cam.directory, self.cam.max_file_size)
 
         while self.running:
 
@@ -108,22 +108,18 @@ class ImageReadThread(threading.Thread):
                 image = convert_image(data, rtn_cfg, self.cam.color_mode)
                 image = cv2.medianBlur(image, 3)
 
+                if counter % 10 == 0:
+                    fps = fps_counter.get_fps(10)
                 if self.cam.show_label:
-                    if self.cam.show_fps and counter % 10 == 0:
-                        fps = str(fps_counter.get_fps(10))
                     self.add_label(image, fps)
-
                 if self.cam.rotation_angle != 0:
                     image = imutils.rotate_bound(image, int(self.cam.rotation_angle))
-
                 if self.cam.show_preview:
                     self.show_image(image)
-
                 if video is not None:
                     video.add_frame(image)
                     if counter != 0 and video.size >= self.cam.dump_size:
-                        self.logger.info("Dumping frames to {}".format(video.filename))
-                        video.dump_async()
+                        video.dump_async(fps)
 
                 counter += 1
             except ImageReadException as e:

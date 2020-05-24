@@ -3,8 +3,9 @@ device_id: 0
 rotation_angle: 0
 register_config: resources/AR0134_960p_Color.json
 show_preview: true
-show_fps: true
 show_label: true
 recording:
+  directory: ../recordings
   enabled: true
-  dump_size: 200
+  dump_size: 2000
+  max_size: 0

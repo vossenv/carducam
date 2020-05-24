@@ -137,9 +137,10 @@ class Arducam:
         self.register_config = reg_config or {}
         self.dev_id = cam_config['device_id']
         self.recording_enabled = cam_config['recording'].get('enabled', False)
-        self.dump_size = cam_config['recording'].get('dump_size', False)
+        self.dump_size = cam_config['recording'].get('dump_size', 1000)
+        self.directory = cam_config['recording'].get('directory', '.')
+        self.max_file_size = cam_config['recording'].get('max_size', 0)
         self.show_preview = cam_config.get('show_preview', True)
-        self.show_fps = cam_config.get('show_fps', True)
         self.show_label = cam_config.get('show_label', True)
         self.rotation_angle = cam_config.get('rotation_angle', 0)
         self.usb_version = None
