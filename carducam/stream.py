@@ -19,7 +19,7 @@ def reprint(msg):
     sys.stdout.flush()
 
 
-with open("config.yml", 'r') as stream:
+with open("resources/config.yml", 'r') as stream:
     cfg = yaml.safe_load(stream)
 
 # For clarity in code
