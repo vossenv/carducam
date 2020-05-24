@@ -137,6 +137,7 @@ class Arducam:
         self.register_config = reg_config or {}
         self.dev_id = cam_config['device_id']
         self.recording_enabled = cam_config['recording'].get('enabled', False)
+        self.dump_size = cam_config['recording'].get('dump_size', False)
         self.show_preview = cam_config.get('show_preview', True)
         self.show_fps = cam_config.get('show_fps', True)
         self.show_label = cam_config.get('show_label', True)

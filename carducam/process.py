@@ -1,3 +1,4 @@
+import datetime
 import logging
 import threading
 import time
@@ -8,6 +9,37 @@ from cv2 import cv2
 from carducam.error import ImageCaptureException, USBCameraTaskError, ImageReadException
 from lib import ArducamSDK
 from lib.ImageConvert import convert_image
+
+
+class Video():
+
+    def __init__(self, filename="out.avi"):
+        self.filename = filename
+        self.frames = []
+        self.writer = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc('X', 'V', 'I', 'D'), 50, (1280, 964))
+        self.size = 0
+        self.logger = logging.getLogger("video")
+
+    def add_frame(self, frame):
+        self.frames.append(frame)
+        self.size += frame.nbytes*1e-6
+
+    def dump_async(self):
+        self.logger.debug("Starting dump - current size: {} mb".format(round(self.size)))
+        dump = self.frames.copy()
+        self.frames = []
+        self.size = 0
+        dt = threading.Thread(target=self.dump_buffer, args=(self.writer, dump, self.logger))
+        dt.start()
+
+    @staticmethod
+    def dump_buffer(writer, frames, logger):
+        for f in frames:
+            writer.write(f)
+        logger.debug("Finished dump")
+
+    def close(self):
+        self.writer.release()
 
 
 class ImageCaptureThread(threading.Thread):
@@ -85,9 +117,15 @@ class ImageReadThread(threading.Thread):
                     cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 255, 255), 1, cv2.LINE_AA)
 
     def read_image(self):
-        counter = 0
+        counter = fps = 0
+        video = None
         fps_counter = FPSCounter().start()
         self.running = True
+
+        if self.cam.recording_enabled:
+            filename = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".avi"
+            video = Video(filename)
+
         while self.running:
 
             if ArducamSDK.Py_ArduCam_availableImage(self.cam.handle) <= 0:
@@ -100,23 +138,30 @@ class ImageReadThread(threading.Thread):
                 image = convert_image(data, rtn_cfg, self.cam.color_mode)
                 image = cv2.medianBlur(image, 3)
 
+                if self.cam.show_label:
+                    if self.cam.show_fps and counter % 10 == 0:
+                        fps = str(fps_counter.get_fps(10))
+                    self.add_label(image, fps)
+
                 if self.cam.rotation_angle != 0:
                     image = imutils.rotate_bound(image, int(self.cam.rotation_angle))
 
-                if self.cam.show_label:
-                    text = ""
-                    if self.cam.show_fps and counter % 10 == 0:
-                        text += str(fps_counter.get_fps(10))
-                    self.add_label(image, text)
-
                 if self.cam.show_preview:
                     self.show_image(image)
+
+                if video is not None:
+                    video.add_frame(image)
+                    if counter != 0 and video.size >= self.cam.dump_size:
+                        self.logger.info("Dumping frames to {}".format(video.filename))
+                        video.dump_async()
 
                 counter += 1
             except ImageReadException as e:
                 self.logger.warning("Bad image read: {}".format(e))
             finally:
                 ArducamSDK.Py_ArduCam_del(self.cam.handle)
+        if video is not None:
+            video.close()
 
 
 class FPSCounter():

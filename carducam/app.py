@@ -18,7 +18,7 @@ def main():
     while True:
         time.sleep(1)
 
-        if count == 5:
+        if count == 500:
             a.stop()
             exit()
 
